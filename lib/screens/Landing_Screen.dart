@@ -44,7 +44,8 @@ class _LandingScreenState extends State<LandingScreen> {
               alignment: Alignment.topRight,
               child: TextButton(
                 onPressed: () {
-                  _navigateToHome();
+                  Navigator.pushReplacement(context,MaterialPageRoute(builder: (context) => const HomeScreen()),
+                  );
                 },
                 child: const Text(
                   'Skip',
