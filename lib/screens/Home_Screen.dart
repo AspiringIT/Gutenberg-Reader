@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gutenberg_reader/screens/BookDetail_Screen.dart';
+import 'package:gutenberg_reader/services/Book_Search_Delegate.dart';
 import '../models/Book.dart';
 import '../services/Gutenberg_Service.dart';
 
@@ -43,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final booksData = await _service.fetchBooks(page: _currentPage);
       setState(() {
         if (isRefresh || _currentPage == 1) {
-          _books = booksData; // Already List<Book>, no fromJson
+          _books = booksData;
         } else {
           _books.addAll(booksData);
         }
@@ -77,6 +78,22 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchBooks();
   }
 
+  void _startSearch() async {
+    final result = await showSearch<Book?>(
+      context: context,
+      delegate: BookSearchDelegate(_service),
+    );
+
+    if (result != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BookDetailsScreen(book: result),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,9 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Implement search
-            },
+            onPressed: _startSearch,
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -129,13 +144,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 )
               : Column(
                   children: [
-                    // Progress indicator for refresh
                     if (_isRefreshing)
-                      const LinearProgressIndicator(
-                        minHeight: 2,
-                      ),
-
-                    // Book count indicator
+                      const LinearProgressIndicator(minHeight: 2),
                     Container(
                       padding: const EdgeInsets.all(12),
                       color: Colors.grey[100],
@@ -151,8 +161,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-
-                    // Book list
                     Expanded(
                       child: RefreshIndicator(
                         onRefresh: () => _fetchBooks(isRefresh: true),
@@ -163,7 +171,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (index == _books.length) {
                               return _buildLoadingIndicator();
                             }
-
                             final book = _books[index];
                             return _buildBookItem(book, index);
                           },
@@ -184,9 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               )
             : const Icon(Icons.add),
-        label: Text(
-          _isLoading ? 'Loading…' : 'Load More',
-        ),
+        label: Text(_isLoading ? 'Loading…' : 'Load More'),
       ),
     );
   }

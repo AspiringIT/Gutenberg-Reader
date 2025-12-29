@@ -1,31 +1,48 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:gutenberg_reader/models/Book.dart';
 import 'package:http/http.dart' as http;
 
 class GutenbergService {
   static const Duration _timeout = Duration(seconds: 30);
 
-Future<List<Book>> fetchBooks({int page = 1}) async {
-  try {
-    final response = await http
-        .get(Uri.parse('https://gutendex.com/books?page=$page'))
-        .timeout(const Duration(seconds: 30));
+  Future<List<Book>> fetchBooks({int page = 1}) async {
+    try {
+      final response = await http
+          .get(Uri.parse('https://gutendex.com/books?page=$page'))
+          .timeout(_timeout);
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final results = data['results'] as List<dynamic>;
-      return results.map((json) => Book.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to load books: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final results = data['results'] as List<dynamic>;
+        return results.map((json) => Book.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to load books: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching books: $e');
     }
-  } catch (e) {
-    throw Exception('Error fetching books: $e');
   }
-}
 
+  Future<List<Book>> searchBooks(String query, {int page = 1}) async {
+    try {
+      final url =
+          Uri.parse('https://gutendex.com/books?search=$query&page=$page');
+      final response = await http.get(url).timeout(_timeout);
 
-  /// Fetch full book text in chunks with progress
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final results = data['results'] as List<dynamic>;
+        return results.map((json) => Book.fromJson(json)).toList();
+      } else if (response.statusCode == 404) {
+        return [];
+      } else {
+        throw Exception('Failed to search books: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error searching books: $e');
+    }
+  }
+
   Future<void> fetchBookTextWithProgress(
     int bookId, {
     void Function(int loadedBytes, int? totalBytes)? onProgress,
@@ -44,7 +61,6 @@ Future<List<Book>> fetchBooks({int page = 1}) async {
         loadedBytes += chunkBytes.length;
 
         if (onChunk != null) {
-          // Decode UTF-8 safely
           final chunkText = utf8.decode(chunkBytes, allowMalformed: true);
           onChunk(chunkText);
         }
@@ -54,7 +70,6 @@ Future<List<Book>> fetchBooks({int page = 1}) async {
         }
       }
     } catch (e) {
-      // If download fails, send sample content
       if (onChunk != null) {
         onChunk(_getSampleContent(bookId));
       }
@@ -64,7 +79,6 @@ Future<List<Book>> fetchBooks({int page = 1}) async {
     }
   }
 
-  /// Sample fallback content
   String _getSampleContent(int bookId) {
     return '''
 The Project Gutenberg eBook #$bookId

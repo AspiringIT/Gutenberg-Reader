@@ -4,6 +4,7 @@ import 'package:gutenberg_reader/screens/Home_Screen.dart';
 import 'package:gutenberg_reader/screens/Landing_Screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,18 +31,17 @@ class _MyAppState extends State<MyApp> {
     final prefs = await SharedPreferences.getInstance();
     final hasSeenLanding = prefs.getBool('has_seen_landing') ?? false;
 
-    // Set to true to always show landing, or false to show only on first launch
     setState(() {
-      _showLanding = true; //!hasSeenLanding;
+      _showLanding = true; // set false if you want only first launch
     });
 
-    // Mark as seen
     await prefs.setBool('has_seen_landing', true);
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Gutenberg Reader',
       theme: AppThemes.lightTheme,
       darkTheme: AppThemes.darkTheme,
