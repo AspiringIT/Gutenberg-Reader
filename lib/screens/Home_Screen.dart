@@ -15,41 +15,69 @@ class _HomeScreenState extends State<HomeScreen> {
   final GutenbergService _service = GutenbergService();
   List<Book> _books = [];
   bool _isLoading = true;
+  bool _isRefreshing = false;
   int _currentPage = 1;
-  bool _showWelcome = true;
+  bool _hasError = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
     _fetchBooks();
-
-    // Hide welcome message after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _showWelcome = false;
-        });
-      }
-    });
   }
 
-  Future<void> _fetchBooks() async {
+  Future<void> _fetchBooks({bool isRefresh = false}) async {
+    if (isRefresh) {
+      setState(() {
+        _isRefreshing = true;
+        _hasError = false;
+        _currentPage = 1;
+      });
+    } else {
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+      });
+    }
+
     try {
       final booksData = await _service.fetchBooks(page: _currentPage);
       setState(() {
-        _books = booksData.map((json) => Book.fromJson(json)).toList();
+        // For refresh, replace books. For load more, append books.
+        if (isRefresh || _currentPage == 1) {
+          _books = booksData.map((json) => Book.fromJson(json)).toList();
+        } else {
+          _books.addAll(booksData.map((json) => Book.fromJson(json)).toList());
+        }
         _isLoading = false;
+        _isRefreshing = false;
       });
     } catch (e) {
       setState(() {
         _isLoading = false;
+        _isRefreshing = false;
+        _hasError = true;
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
-      if (context.mounted) {
+
+      if (!isRefresh && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text('Failed to load books: ${_errorMessage}'),
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
     }
+  }
+
+  void _loadMoreBooks() {
+    if (_isLoading || _isRefreshing) return;
+
+    setState(() {
+      _currentPage++;
+    });
+    _fetchBooks();
   }
 
   @override
@@ -57,12 +85,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gutenberg Reader'),
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () {
-            // TODO: Add drawer menu
-          },
-        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -71,115 +93,61 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () {
-              // TODO: Add profile/settings
-            },
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _fetchBooks(isRefresh: true),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Welcome banner
-          if (_showWelcome)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              height: _showWelcome ? 80 : 0,
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              child: Row(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Icon(
-                      Icons.auto_stories_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 40,
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Welcome to Gutenberg Reader!',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Start your reading journey with free books',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      setState(() {
-                        _showWelcome = false;
-                      });
-                    },
-                  ),
-                ],
+      body: _isLoading && _books.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : _hasError && _books.isEmpty
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            const Text(
+              'Failed to Load Books',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                _errorMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600]),
               ),
             ),
-
-          // Stats row
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildStatCard(
-                  context,
-                  icon: Icons.library_books,
-                  value: '60,000+',
-                  label: 'Free Books',
-                  color: Colors.blue,
-                ),
-                _buildStatCard(
-                  context,
-                  icon: Icons.language,
-                  value: '100+',
-                  label: 'Languages',
-                  color: Colors.green,
-                ),
-                _buildStatCard(
-                  context,
-                  icon: Icons.history_edu,
-                  value: '500+',
-                  label: 'Authors',
-                  color: Colors.purple,
-                ),
-              ],
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _fetchBooks(isRefresh: true),
+              child: const Text('Try Again'),
             ),
-          ),
+          ],
+        ),
+      )
+          : Column(
+        children: [
+          // Progress indicator for refresh
+          if (_isRefreshing)
+            const LinearProgressIndicator(
+              minHeight: 2,
+            ),
 
-          // Featured section header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          // Book count indicator
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: Colors.grey[100],
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                Icon(Icons.book, size: 16, color: Colors.grey[600]),
+                const SizedBox(width: 8),
                 Text(
-                  'Featured Books',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // TODO: Show all books
-                  },
-                  child: const Text('See All'),
+                  'Showing ${_books.length} books',
+                  style: TextStyle(color: Colors.grey[600]),
                 ),
               ],
             ),
@@ -187,241 +155,85 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Book list
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _books.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.book,
-                    size: 64,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No books found',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Check your internet connection',
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _fetchBooks,
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            )
-                : RefreshIndicator(
-              onRefresh: () async {
-                setState(() {
-                  _currentPage = 1;
-                });
-                await _fetchBooks();
-              },
+            child: RefreshIndicator(
+              onRefresh: () => _fetchBooks(isRefresh: true),
               child: ListView.builder(
-                itemCount: _books.length,
+                padding: const EdgeInsets.all(8),
+                itemCount: _books.length + (_isLoading ? 1 : 0),
                 itemBuilder: (context, index) {
+                  // Show loading indicator at the end
+                  if (index == _books.length) {
+                    return _buildLoadingIndicator();
+                  }
+
                   final book = _books[index];
-                  return _buildBookCard(context, book, index);
+                  return _buildBookItem(book, index);
                 },
               ),
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          setState(() {
-            _currentPage++;
-            _fetchBooks();
-          });
-        },
-        icon: const Icon(Icons.explore),
-        label: const Text('Explore More'),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _loadMoreBooks,
+        child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Icon(Icons.add),
       ),
     );
   }
 
-  Widget _buildStatCard(BuildContext context, {
-    required IconData icon,
-    required String value,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      width: 100,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: color.withOpacity(0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBookCard(BuildContext context, Book book, int index) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ReaderScreen(book: book),
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Book cover
-                Container(
-                  width: 70,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: _getBookColor(index),
-                    borderRadius: BorderRadius.circular(8),
-                    image: book.coverUrl != null
-                        ? DecorationImage(
-                      image: NetworkImage(book.coverUrl!),
-                      fit: BoxFit.cover,
-                    )
-                        : null,
-                  ),
-                  child: book.coverUrl == null
-                      ? Center(
-                    child: Icon(
-                      Icons.book,
-                      size: 40,
-                      color: Colors.white,
-                    ),
-                  )
-                      : null,
-                ),
-
-                const SizedBox(width: 16),
-
-                // Book info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        book.title,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      Text(
-                        book.authors.join(', '),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      if (book.subjects.isNotEmpty)
-                        Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: book.subjects.take(2).map((subject) {
-                            return Chip(
-                              label: Text(
-                                subject.length > 15
-                                    ? '${subject.substring(0, 15)}...'
-                                    : subject,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              backgroundColor: Colors.grey.shade100,
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                            );
-                          }).toList(),
-                        ),
-                    ],
-                  ),
-                ),
-
-                // Action button
-                IconButton(
-                  icon: const Icon(Icons.arrow_forward_ios_rounded),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ReaderScreen(book: book),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
+  Widget _buildBookItem(Book book, int index) {
+    // Use a simpler design for better performance
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: _getBookColor(index),
+          child: Text(
+            book.title.substring(0, 1).toUpperCase(),
+            style: const TextStyle(color: Colors.white),
           ),
         ),
+        title: Text(
+          book.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          book.authors.isNotEmpty ? book.authors.join(', ') : 'Unknown Author',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ReaderScreen(book: book),
+            ),
+          );
+        },
       ),
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      alignment: Alignment.center,
+      child: const CircularProgressIndicator(),
     );
   }
 
   Color _getBookColor(int index) {
     final colors = [
-      Colors.blue.shade700,
-      Colors.green.shade700,
-      Colors.purple.shade700,
-      Colors.orange.shade700,
-      Colors.red.shade700,
-      Colors.teal.shade700,
+      Colors.blue,
+      Colors.green,
+      Colors.purple,
+      Colors.orange,
+      Colors.red,
+      Colors.teal,
     ];
     return colors[index % colors.length];
   }

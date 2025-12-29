@@ -32,7 +32,7 @@ class _MyAppState extends State<MyApp> {
 
     // Set to true to always show landing, or false to show only on first launch
     setState(() {
-      _showLanding = !hasSeenLanding;
+      _showLanding = true; //!hasSeenLanding;
     });
 
     // Mark as seen

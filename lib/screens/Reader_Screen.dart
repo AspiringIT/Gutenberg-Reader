@@ -3,6 +3,7 @@ import '../app/Theme.dart';
 import '../models/Book.dart';
 import '../services/Gutenberg_Service.dart';
 
+
 class ReaderScreen extends StatefulWidget {
   final Book book;
 
@@ -14,10 +15,11 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   final GutenbergService _service = GutenbergService();
-  String _content = '';
+  String _content = 'Loading...';
   bool _isLoading = true;
-  double _fontSize = 16.0;
+  double _fontSize = 18.0;
   ThemeData _currentTheme = AppThemes.lightTheme;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -25,7 +27,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _loadBookContent();
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadBookContent() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final content = await _service.fetchBookText(widget.book.id);
       setState(() {
@@ -34,7 +46,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       });
     } catch (e) {
       setState(() {
-        _content = 'Error loading book content: $e';
+        _content = 'Failed to load content. Please try again later.\n\nError: $e';
         _isLoading = false;
       });
     }
@@ -52,7 +64,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
       data: _currentTheme,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.book.title),
+          title: Text(
+            widget.book.title.length > 20
+                ? '${widget.book.title.substring(0, 20)}...'
+                : widget.book.title,
+          ),
           actions: [
             PopupMenuButton<ThemeData>(
               icon: const Icon(Icons.palette),
@@ -99,19 +115,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
               },
               itemBuilder: (context) => [
                 const PopupMenuItem(
-                  value: 14.0,
+                  value: 16.0,
                   child: Text('Small'),
                 ),
                 const PopupMenuItem(
-                  value: 16.0,
+                  value: 18.0,
                   child: Text('Medium'),
                 ),
                 const PopupMenuItem(
-                  value: 18.0,
+                  value: 20.0,
                   child: Text('Large'),
                 ),
                 const PopupMenuItem(
-                  value: 20.0,
+                  value: 22.0,
                   child: Text('Extra Large'),
                 ),
               ],
@@ -119,42 +135,110 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading book content...'),
+            ],
+          ),
+        )
             : Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: ListView(
+            controller: _scrollController,
+            children: [
+              // Book title
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: Text(
                   widget.book.title,
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                Text(
+              ),
+
+              // Author
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24.0),
+                child: Text(
                   'By ${widget.book.authors.join(', ')}',
                   style: Theme.of(context).textTheme.titleMedium,
+                  textAlign: TextAlign.center,
                 ),
-                const Divider(height: 32),
-                Text(
+              ),
+
+              const Divider(),
+
+              // Content
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: Text(
                   _content,
                   style: TextStyle(
                     fontSize: _fontSize,
                     height: 1.6,
                   ),
                 ),
-              ],
-            ),
+              ),
+
+              // End of book indicator
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32.0),
+                child: Text(
+                  '--- END ---',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            // TODO: Implement download functionality
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Downloading book...')),
-            );
-          },
-          child: const Icon(Icons.download),
+        floatingActionButton: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton.small(
+              heroTag: 'scroll_top',
+              onPressed: () {
+                _scrollController.animateTo(
+                  0,
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
+                );
+              },
+              child: const Icon(Icons.arrow_upward),
+            ),
+            const SizedBox(height: 8),
+            FloatingActionButton.small(
+              heroTag: 'scroll_bottom',
+              onPressed: () {
+                _scrollController.animateTo(
+                  _scrollController.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
+                );
+              },
+              child: const Icon(Icons.arrow_downward),
+            ),
+            const SizedBox(height: 8),
+            FloatingActionButton(
+              heroTag: 'download',
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Download feature coming soon!')),
+                );
+              },
+              child: const Icon(Icons.download),
+            ),
+          ],
         ),
       ),
     );
