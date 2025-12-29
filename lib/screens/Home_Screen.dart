@@ -174,12 +174,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _loadMoreBooks,
-        child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Icon(Icons.add),
-      ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: (_isLoading || _isRefreshing) ? null : _loadMoreBooks,
+          icon: _isLoading
+              ? const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
+          )
+              : const Icon(Icons.add),
+          label: Text(
+            _isLoading ? 'Loading…' : 'Load More',
+          ),
+        ),
     );
   }
 
