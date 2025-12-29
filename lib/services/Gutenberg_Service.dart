@@ -1,27 +1,29 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:gutenberg_reader/models/Book.dart';
 import 'package:http/http.dart' as http;
 
 class GutenbergService {
   static const Duration _timeout = Duration(seconds: 30);
 
-  /// Fetch list of books from Gutendex
-  Future<List<dynamic>> fetchBooks({int page = 1}) async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://gutendex.com/books?page=$page'),
-      ).timeout(_timeout);
+Future<List<Book>> fetchBooks({int page = 1}) async {
+  try {
+    final response = await http
+        .get(Uri.parse('https://gutendex.com/books?page=$page'))
+        .timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['results'] as List;
-      } else {
-        throw Exception('Failed to load books: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('Error fetching books: $e');
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final results = data['results'] as List<dynamic>;
+      return results.map((json) => Book.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load books: ${response.statusCode}');
     }
+  } catch (e) {
+    throw Exception('Error fetching books: $e');
   }
+}
+
 
   /// Fetch full book text in chunks with progress
   Future<void> fetchBookTextWithProgress(

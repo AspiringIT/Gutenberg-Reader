@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:gutenberg_reader/screens/BookDetail_Screen.dart';
 import '../models/Book.dart';
 import '../services/Gutenberg_Service.dart';
-import 'Reader_Screen.dart';
-
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -43,11 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final booksData = await _service.fetchBooks(page: _currentPage);
       setState(() {
-        // For refresh, replace books. For load more, append books.
         if (isRefresh || _currentPage == 1) {
-          _books = booksData.map((json) => Book.fromJson(json)).toList();
+          _books = booksData; // Already List<Book>, no fromJson
         } else {
-          _books.addAll(booksData.map((json) => Book.fromJson(json)).toList());
+          _books.addAll(booksData);
         }
         _isLoading = false;
         _isRefreshing = false;
@@ -63,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!isRefresh && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load books: ${_errorMessage}'),
+            content: Text('Failed to load books: $_errorMessage'),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -73,7 +71,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _loadMoreBooks() {
     if (_isLoading || _isRefreshing) return;
-
     setState(() {
       _currentPage++;
     });
@@ -101,100 +98,100 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isLoading && _books.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _hasError && _books.isEmpty
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            const Text(
-              'Failed to Load Books',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                _errorMessage,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _fetchBooks(isRefresh: true),
-              child: const Text('Try Again'),
-            ),
-          ],
-        ),
-      )
-          : Column(
-        children: [
-          // Progress indicator for refresh
-          if (_isRefreshing)
-            const LinearProgressIndicator(
-              minHeight: 2,
-            ),
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Failed to Load Books',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          _errorMessage,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => _fetchBooks(isRefresh: true),
+                        child: const Text('Try Again'),
+                      ),
+                    ],
+                  ),
+                )
+              : Column(
+                  children: [
+                    // Progress indicator for refresh
+                    if (_isRefreshing)
+                      const LinearProgressIndicator(
+                        minHeight: 2,
+                      ),
 
-          // Book count indicator
-          Container(
-            padding: const EdgeInsets.all(12),
-            color: Colors.grey[100],
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.book, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 8),
-                Text(
-                  'Showing ${_books.length} books',
-                  style: TextStyle(color: Colors.grey[600]),
+                    // Book count indicator
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      color: Colors.grey[100],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.book, size: 16, color: Colors.grey[600]),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Showing ${_books.length} books',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Book list
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: () => _fetchBooks(isRefresh: true),
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(8),
+                          itemCount: _books.length + (_isLoading ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == _books.length) {
+                              return _buildLoadingIndicator();
+                            }
+
+                            final book = _books[index];
+                            return _buildBookItem(book, index);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-
-          // Book list
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => _fetchBooks(isRefresh: true),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: _books.length + (_isLoading ? 1 : 0),
-                itemBuilder: (context, index) {
-                  // Show loading indicator at the end
-                  if (index == _books.length) {
-                    return _buildLoadingIndicator();
-                  }
-
-                  final book = _books[index];
-                  return _buildBookItem(book, index);
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: (_isLoading || _isRefreshing) ? null : _loadMoreBooks,
-          icon: _isLoading
-              ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white,
-            ),
-          )
-              : const Icon(Icons.add),
-          label: Text(
-            _isLoading ? 'Loading…' : 'Load More',
-          ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: (_isLoading || _isRefreshing) ? null : _loadMoreBooks,
+        icon: _isLoading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.add),
+        label: Text(
+          _isLoading ? 'Loading…' : 'Load More',
         ),
+      ),
     );
   }
 
   Widget _buildBookItem(Book book, int index) {
-    // Use a simpler design for better performance
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
@@ -220,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ReaderScreen(book: book),
+              builder: (context) => BookDetailsScreen(book: book),
             ),
           );
         },
