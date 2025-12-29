@@ -3,6 +3,8 @@ import '../app/Theme.dart';
 import '../models/Book.dart';
 import '../services/Gutenberg_Service.dart';
 
+enum TextLayout { left, justify, center, right }
+
 class ReaderScreen extends StatefulWidget {
   final Book book;
 
@@ -18,15 +20,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _isLoading = true;
   double _fontSize = 18.0;
   ThemeData _currentTheme = AppThemes.lightTheme;
+  TextLayout _textLayout = TextLayout.left;
   final ScrollController _scrollController = ScrollController();
 
   // Progress tracking
   int _loadedBytes = 0;
   int? _totalBytes;
 
+  // Store last selected layout for all books
+  static TextLayout lastSelectedLayout = TextLayout.left;
+
   @override
   void initState() {
     super.initState();
+    _textLayout = lastSelectedLayout; // Load last used layout
     _loadBookContent();
   }
 
@@ -83,11 +90,24 @@ class _ReaderScreenState extends State<ReaderScreen> {
     });
   }
 
-  /// Incremental scroll to target offset to prevent freezing
+  TextAlign _getTextAlign() {
+    switch (_textLayout) {
+      case TextLayout.justify:
+        return TextAlign.justify;
+      case TextLayout.center:
+        return TextAlign.center;
+      case TextLayout.right:
+        return TextAlign.end;
+      case TextLayout.left:
+      default:
+        return TextAlign.start;
+    }
+  }
+
   Future<void> _scrollSmoothly(double target) async {
     if (!_scrollController.hasClients) return;
 
-    const step = 300.0; // pixels per step
+    const step = 300.0; 
     const delay = Duration(milliseconds: 5);
 
     double current = _scrollController.offset;
@@ -121,6 +141,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 : widget.book.title,
           ),
           actions: [
+            // Theme selection
             PopupMenuButton<ThemeData>(
               icon: const Icon(Icons.palette),
               onSelected: _changeTheme,
@@ -157,6 +178,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 ),
               ],
             ),
+            // Font size
             PopupMenuButton<double>(
               icon: const Icon(Icons.text_fields),
               onSelected: (value) {
@@ -169,6 +191,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 PopupMenuItem(value: 18.0, child: Text('Medium')),
                 PopupMenuItem(value: 20.0, child: Text('Large')),
                 PopupMenuItem(value: 22.0, child: Text('Extra Large')),
+              ],
+            ),
+            // Text layout
+            PopupMenuButton<TextLayout>(
+              icon: const Icon(Icons.format_align_left),
+              onSelected: (value) {
+                setState(() {
+                  _textLayout = value;
+                  lastSelectedLayout = value; // Save last selection
+                });
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: TextLayout.left, child: Text('Left')),
+                PopupMenuItem(value: TextLayout.justify, child: Text('Justify')),
+                PopupMenuItem(value: TextLayout.center, child: Text('Center')),
+                PopupMenuItem(value: TextLayout.right, child: Text('Right')),
               ],
             ),
           ],
@@ -219,13 +257,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           );
                         } else if (index <= _paragraphs.length + 1) {
                           return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            padding: EdgeInsets.symmetric(
+                              vertical: 8.0,
+                              horizontal:
+                                  _textLayout == TextLayout.justify ? 16 : 8,
+                            ),
                             child: Text(
                               _paragraphs[index - 2],
                               style: TextStyle(
                                 fontSize: _fontSize,
                                 height: 1.6,
                               ),
+                              textAlign: _getTextAlign(),
                             ),
                           );
                         } else {
