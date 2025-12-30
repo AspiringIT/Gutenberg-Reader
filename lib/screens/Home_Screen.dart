@@ -1,6 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:gutenberg_reader/screens/BookDetail_Screen.dart';
+import 'package:gutenberg_reader/screens/GutenbergLicenseScreen.dart';
+import 'package:gutenberg_reader/services/Book_Search_Delegate.dart';
 import '../models/Book.dart';
 import '../services/Gutenberg_Service.dart';
 
@@ -24,33 +25,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _fetchBooks();
-
-    // Show popup if running on web
-    if (kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showWebWarning();
-      });
-    }
-  }
-
-  void _showWebWarning() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Web Unsupported'),
-        content: const Text(
-          'The web version is currently unsupported.\n\n'
-          'Reading books is nonfunctional due to browser restrictions (CORS).\n\n'
-          'Please use the desktop or mobile app for full functionality.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _fetchBooks({bool isRefresh = false}) async {
@@ -105,12 +79,45 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchBooks();
   }
 
+  void _startSearch() async {
+    final result = await showSearch<Book?>(
+      context: context,
+      delegate: BookSearchDelegate(_service),
+    );
+
+    if (result != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BookDetailsScreen(book: result),
+        ),
+      );
+    }
+  }
+
+  void _openAbout() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AboutScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gutenberg Reader'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: _startSearch,
+          ),
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: _openAbout,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => _fetchBooks(isRefresh: true),
@@ -153,6 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     if (_isRefreshing)
                       const LinearProgressIndicator(minHeight: 2),
+
                     Container(
                       padding: const EdgeInsets.all(12),
                       color: Colors.grey[100],
@@ -168,6 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
+
                     Expanded(
                       child: RefreshIndicator(
                         onRefresh: () => _fetchBooks(isRefresh: true),
@@ -178,6 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (index == _books.length) {
                               return _buildLoadingIndicator();
                             }
+
                             final book = _books[index];
                             return _buildBookItem(book, index);
                           },
