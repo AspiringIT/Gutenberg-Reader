@@ -1,0 +1,1 @@
+enum TextLayout { left, justify, center, right }
