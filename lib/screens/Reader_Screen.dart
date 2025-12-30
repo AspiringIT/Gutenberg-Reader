@@ -30,10 +30,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
   // Store last selected layout for all books
   static TextLayout lastSelectedLayout = TextLayout.left;
 
+  // Page turning mode
+  bool _isPageTurnMode = false;
+
   @override
   void initState() {
     super.initState();
-    _textLayout = lastSelectedLayout; // Load last used layout
+    _textLayout = lastSelectedLayout;
     _loadBookContent();
   }
 
@@ -125,6 +128,95 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
+  // Split paragraphs into pages
+  List<List<String>> _generatePages(double pageHeight, TextStyle style) {
+    List<List<String>> pages = [];
+    List<String> currentPage = [];
+    double currentHeight = 0.0;
+
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: _getTextAlign(),
+    );
+
+    for (var paragraph in _paragraphs) {
+      textPainter.text = TextSpan(text: paragraph, style: style);
+      textPainter.layout(maxWidth: MediaQuery.of(context).size.width - 32); // padding
+
+      final paragraphHeight = textPainter.height + 16; // vertical padding
+      if (currentHeight + paragraphHeight > pageHeight) {
+        pages.add(currentPage);
+        currentPage = [];
+        currentHeight = 0;
+      }
+
+      currentPage.add(paragraph);
+      currentHeight += paragraphHeight;
+    }
+
+    if (currentPage.isNotEmpty) {
+      pages.add(currentPage);
+    }
+
+    return pages;
+  }
+
+  Widget _buildListItem(BuildContext context, int index) {
+    if (index == 0) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24.0),
+        child: Text(
+          widget.book.title,
+          style: Theme.of(context)
+              .textTheme
+              .headlineMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+      );
+    } else if (index == 1) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 24.0),
+        child: Column(
+          children: [
+            Text(
+              'By ${widget.book.authors.join(', ')}',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+          ],
+        ),
+      );
+    } else if (index <= _paragraphs.length + 1) {
+      return Padding(
+        padding: EdgeInsets.symmetric(
+          vertical: 8.0,
+          horizontal: _textLayout == TextLayout.justify ? 16 : 8,
+        ),
+        child: Text(
+          _paragraphs[index - 2],
+          style: TextStyle(
+            fontSize: _fontSize,
+            height: 1.6,
+          ),
+          textAlign: _getTextAlign(),
+        ),
+      );
+    } else {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48.0),
+        child: Text(
+          '--- END OF BOOK ---',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              fontSize: 14, color: Colors.grey, fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final progressValue = (_totalBytes != null && _totalBytes! > 0)
@@ -141,6 +233,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 : widget.book.title,
           ),
           actions: [
+            // Toggle page-turning mode
+            IconButton(
+              icon: Icon(
+                  _isPageTurnMode ? Icons.menu_book : Icons.swap_horiz),
+              tooltip: _isPageTurnMode ? 'Scroll Mode' : 'Page Turn Mode',
+              onPressed: () {
+                setState(() {
+                  _isPageTurnMode = !_isPageTurnMode;
+                });
+              },
+            ),
             // Theme selection
             PopupMenuButton<ThemeData>(
               icon: const Icon(Icons.palette),
@@ -199,7 +302,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               onSelected: (value) {
                 setState(() {
                   _textLayout = value;
-                  lastSelectedLayout = value; // Save last selection
+                  lastSelectedLayout = value;
                 });
               },
               itemBuilder: (context) => const [
@@ -224,87 +327,73 @@ class _ReaderScreenState extends State<ReaderScreen> {
             Expanded(
               child: _paragraphs.isEmpty
                   ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                      controller: _scrollController,
-                      itemCount: _paragraphs.length + 3,
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 24.0),
-                            child: Text(
-                              widget.book.title,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                              textAlign: TextAlign.center,
-                            ),
-                          );
-                        } else if (index == 1) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 24.0),
-                            child: Column(
-                              children: [
-                                Text(
-                                  'By ${widget.book.authors.join(', ')}',
-                                  style: Theme.of(context).textTheme.titleMedium,
-                                  textAlign: TextAlign.center,
+                  : _isPageTurnMode
+                      ? Builder(builder: (context) {
+                          final pageHeight =
+                              MediaQuery.of(context).size.height - 150;
+                          final style = TextStyle(fontSize: _fontSize, height: 1.6);
+                          final pages = _generatePages(pageHeight, style);
+
+                          return PageView.builder(
+                            itemCount: pages.length + 1,
+                            itemBuilder: (context, index) {
+                              if (index == pages.length) {
+                                return const Center(
+                                  child: Text(
+                                    '--- END OF BOOK ---',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey,
+                                        fontStyle: FontStyle.italic),
+                                  ),
+                                );
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: pages[index]
+                                      .map((p) => Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 8.0),
+                                            child: Text(
+                                              p,
+                                              style: style,
+                                              textAlign: _getTextAlign(),
+                                            ),
+                                          ))
+                                      .toList(),
                                 ),
-                                const SizedBox(height: 16),
-                                const Divider(),
-                              ],
-                            ),
+                              );
+                            },
                           );
-                        } else if (index <= _paragraphs.length + 1) {
-                          return Padding(
-                            padding: EdgeInsets.symmetric(
-                              vertical: 8.0,
-                              horizontal:
-                                  _textLayout == TextLayout.justify ? 16 : 8,
-                            ),
-                            child: Text(
-                              _paragraphs[index - 2],
-                              style: TextStyle(
-                                fontSize: _fontSize,
-                                height: 1.6,
-                              ),
-                              textAlign: _getTextAlign(),
-                            ),
-                          );
-                        } else {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 48.0),
-                            child: Text(
-                              '--- END OF BOOK ---',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                  fontStyle: FontStyle.italic),
-                            ),
-                          );
-                        }
-                      },
-                    ),
+                        })
+                      : ListView.builder(
+                          controller: _scrollController,
+                          itemCount: _paragraphs.length + 3,
+                          itemBuilder: _buildListItem,
+                        ),
             ),
           ],
         ),
         floatingActionButton: Column(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            FloatingActionButton.small(
-              heroTag: 'scroll_top',
-              onPressed: () => _scrollSmoothly(0),
-              child: const Icon(Icons.arrow_upward),
-            ),
-            const SizedBox(height: 8),
-            FloatingActionButton.small(
-              heroTag: 'scroll_bottom',
-              onPressed: () => _scrollSmoothly(
-                  _scrollController.position.maxScrollExtent),
-              child: const Icon(Icons.arrow_downward),
-            ),
-            const SizedBox(height: 8),
+            if (!_isPageTurnMode)
+              FloatingActionButton.small(
+                heroTag: 'scroll_top',
+                onPressed: () => _scrollSmoothly(0),
+                child: const Icon(Icons.arrow_upward),
+              ),
+            if (!_isPageTurnMode) const SizedBox(height: 8),
+            if (!_isPageTurnMode)
+              FloatingActionButton.small(
+                heroTag: 'scroll_bottom',
+                onPressed: () =>
+                    _scrollSmoothly(_scrollController.position.maxScrollExtent),
+                child: const Icon(Icons.arrow_downward),
+              ),
+            if (!_isPageTurnMode) const SizedBox(height: 8),
             FloatingActionButton(
               heroTag: 'download',
               onPressed: () {
